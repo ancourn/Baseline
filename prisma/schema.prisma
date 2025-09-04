@@ -14,11 +14,24 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
 }
 
 model Post {
@@ -29,4 +42,205 @@ model Post {
   authorId  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Agentic AI System Models
+
+model Agent {
+  id              String   @id @default(cuid())
+  name            String
+  type            String
+  description     String
+  status          AgentStatus @default(IDLE)
+  capabilities    String   // JSON array of capabilities
+  model           String   // Local model name
+  config          String?  // JSON configuration
+  templateId      String?  // Reference to agent template
+  performance     String?  // JSON performance metrics
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relationships
+  tasks           Task[]
+  messages        Message[]
+  executions      Execution[]
+  template        AgentTemplate? @relation(fields: [templateId], references: [id])
+  
+  @@map("agents")
+}
+
+model AgentTemplate {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  displayName     String
+  description     String
+  type            String
+  capabilities    String   // JSON array of capabilities
+  model           String   // Default model for this template
+  config          String?  // Default configuration
+  category        String   // Category for organization
+  tags            String?  // JSON array of tags
+  isSystem        Boolean  @default(false) // System templates cannot be deleted
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relationships
+  agents          Agent[]
+  
+  @@map("agent_templates")
+}
+
+model Task {
+  id            String      @id @default(cuid())
+  title         String
+  description   String
+  status        TaskStatus  @default(PENDING)
+  priority      TaskPriority @default(MEDIUM)
+  input         String?     // JSON input data
+  output        String?     // JSON output data
+  progress      Int         @default(0)
+  scheduledFor  DateTime?   // When to execute the task
+  schedule      String?     // Cron expression for recurring tasks
+  isRecurring   Boolean     @default(false)
+  templateId    String?     // Reference to task template
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  completedAt   DateTime?
+  
+  // Relationships
+  assignedToId  String?
+  assignedTo    Agent?      @relation(fields: [assignedToId], references: [id])
+  executions    Execution[]
+  dependencies  TaskDependency[] @relation("TaskDependencies")
+  dependents    TaskDependency[] @relation("TaskDependents")
+  template      TaskTemplate? @relation(fields: [templateId], references: [id])
+  
+  @@map("tasks")
+}
+
+model TaskTemplate {
+  id            String      @id @default(cuid())
+  name          String      @unique
+  displayName   String
+  description   String
+  type          String
+  priority      TaskPriority @default(MEDIUM)
+  inputTemplate String?     // JSON template for input data
+  config        String?     // Default configuration
+  category      String      // Category for organization
+  tags          String?     // JSON array of tags
+  isSystem      Boolean     @default(false) // System templates cannot be deleted
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  // Relationships
+  tasks         Task[]
+  
+  @@map("task_templates")
+}
+
+model Execution {
+  id          String        @id @default(cuid())
+  status      ExecutionStatus @default(RUNNING)
+  input       String?       // JSON input data
+  output      String?       // JSON output data
+  error       String?
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+  duration    Int?          // Execution time in milliseconds
+  
+  // Relationships
+  agentId     String
+  agent       Agent         @relation(fields: [agentId], references: [id])
+  taskId      String?
+  task        Task?         @relation(fields: [taskId], references: [id])
+  logs        ExecutionLog[]
+  
+  @@map("executions")
+}
+
+model ExecutionLog {
+  id          String   @id @default(cuid())
+  level       LogLevel @default(INFO)
+  message     String
+  metadata    String?  // JSON metadata
+  timestamp   DateTime @default(now())
+  
+  // Relationships
+  executionId String
+  execution   Execution @relation(fields: [executionId], references: [id])
+  
+  @@map("execution_logs")
+}
+
+model Message {
+  id          String       @id @default(cuid())
+  content     String
+  type        MessageType  @default(AGENT)
+  metadata    String?      // JSON metadata
+  timestamp   DateTime     @default(now())
+  
+  // Relationships
+  agentId     String
+  agent       Agent        @relation(fields: [agentId], references: [id])
+  
+  @@map("messages")
+}
+
+model TaskDependency {
+  id            String @id @default(cuid())
+  taskId        String
+  task          Task   @relation("TaskDependencies", fields: [taskId], references: [id])
+  dependsOnId   String
+  dependsOn     Task   @relation("TaskDependents", fields: [dependsOnId], references: [id])
+  
+  @@unique([taskId, dependsOnId])
+  @@map("task_dependencies")
+}
+
+// Enums
+
+enum AgentStatus {
+  IDLE
+  RUNNING
+  PAUSED
+  ERROR
+  STOPPED
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum MessageType {
+  SYSTEM
+  AGENT
+  USER
 }
